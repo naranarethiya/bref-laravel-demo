@@ -132,4 +132,4 @@ custom:
 
   s3Sync:
     - bucketName: ${self:custom.staticBucketName}
-      localDir: public/build
+      localDir: public
