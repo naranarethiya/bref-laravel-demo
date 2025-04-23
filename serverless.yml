@@ -49,6 +49,7 @@ package:
     - '!database/*.sqlite'
     # Exclude assets except for the manifest file
     - '!public/build/**'
+    - 'public/build/manifest.json'
     - '!public/hot'
 
 functions:
