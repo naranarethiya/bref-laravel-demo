@@ -1,0 +1,63 @@
+name: Deploy Laravel with Bref
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Git branch to deploy'
+        required: true
+        default: 'main'
+      stage:
+        description: 'Deployment stage'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  deploy:
+    name: Deploy Laravel to AWS Lambda
+    runs-on: ubuntu-latest
+
+    if: github.ref == format('refs/heads/{0}', inputs.branch)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: Install dependencies
+        run: |
+          composer install --no-dev --prefer-dist --optimize-autoloader
+          npm install && npm run build || echo "No frontend to build"
+
+      - name: Install Serverless CLI
+        run: npm install -g serverless
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region: ap-south-1
+
+      - name: Setup Bref environment variables
+        run: |
+          echo "APP_ENV=${{ inputs.stage }}" >> .env
+          echo "APP_KEY=base64:MdHpk9aZ9Ip9G1nUl11rGkAIxW6c/hpYB2p/p9K/FbM=" >> .env
+          php artisan optimize
+          php artisan config:clear
+
+      - name: Deploy with Serverless
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+        run: |
+          serverless deploy --stage ${{ inputs.stage }} --verbose

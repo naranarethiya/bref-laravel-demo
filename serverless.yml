@@ -1,0 +1,134 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: naran
+service: bref-demo
+provider:
+    name: aws
+    region: ap-south-1
+    stage: ${opt:stage, 'dev'} # e.g. dev, prod, staging
+
+    environment:
+      MAINTENANCE_MODE: ${ssm:/bref-demo-env/MAINTENANCE_MODE}
+      APP_URL: ${ssm:/bref-demo-env/APP_URL}
+      APP_DEBUG: ${ssm:/bref-demo-env/APP_DEBUG}
+      APP_KEY: ${ssm:/bref-demo-env/APP_KEY}
+      DB_DATABASE: ${ssm:/bref-demo-env/DB_DATABASE}
+      DB_CONNECTION: ${ssm:/bref-demo-env/DB_CONNECTION}
+      DB_HOST: ${ssm:/lightsail-db/DB_HOST}
+      DB_PORT: ${ssm:/lightsail-db/DB_PORT}
+      DB_USERNAME: ${ssm:/lightsail-db/DB_USER}
+      DB_PASSWORD: ${ssm:/lightsail-db/DB_PASS}
+      BREF_BINARY_RESPONSES: "1"
+      QUEUE_CONNECTION: sqs
+      SQS_PREFIX: https://sqs.${provider.region}.amazonaws.com/662643139049
+      SQS_QUEUE: ${self:service}-${self:provider.stage}-jobs
+      ASSET_URL: https://${self:custom.staticBucketName}.s3.${self:provider.region}.amazonaws.com
+
+package:
+  # Files and directories to exclude from deployment
+  patterns:
+    - '!.vscode/**'
+    - '!.git/**'
+    - '!.serverless/**'
+    - '!.editorconfig'
+    - '!.env'
+    - '!.env.example'
+    - '!.gitignore'
+    - '!vite.config.js'
+    - '!serverless.yml'
+    - '!phpunit.xml'
+    - '!phpstan.neon'
+    - '!package.json'
+    - '!package-lock.json'
+    - '!node_modules/**'
+    - '!public/storage'
+    - '!resources/js/**'
+    - '!resources/css/**'
+    - '!storage/**'
+    - 'storage/framework/**'
+    - '!tests/**'
+    - '!database/*.sqlite'
+    # Exclude assets except for the manifest file
+    - '!public/build/**'
+    - '!public/hot'
+
+functions:
+
+  # This function runs the Laravel website/API
+  web:
+    handler: public/index.php
+    runtime: php-83-fpm
+    layers:
+      - ${bref-extra:gd-php-82}
+    timeout: 28
+    events:
+      - httpApi: '*'
+
+  # This function lets us run artisan commands in Lambda
+  artisan:
+    handler: artisan
+    runtime: php-83-console
+    layers:
+      - ${bref-extra:gd-php-82}
+    timeout: 720 # in seconds
+    # Uncomment to also run the scheduler every minute
+    #events:
+    #    - schedule:
+    #          rate: rate(1 minute)
+    #          input: '"schedule:run"'
+
+constructs:
+  jobs:
+    type: queue
+    worker:
+      handler: Bref\LaravelBridge\Queue\QueueHandler
+      runtime: php-83
+      timeout: 60 # seconds
+
+resources:
+  Resources:
+    StaticAssetsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.staticBucketName}
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - "*"
+              AllowedMethods:
+                - GET
+                - HEAD
+              AllowedOrigins:
+                - "*"
+              ExposedHeaders:
+                - Access-Control-Allow-Origin
+              MaxAge: 3000
+
+    StaticAssetsBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref StaticAssetsBucket
+        PolicyDocument:
+          Statement:
+            - Sid: PublicReadGetObject
+              Effect: Allow
+              Principal: "*"
+              Action: s3:GetObject
+              Resource: arn:aws:s3:::${self:custom.staticBucketName}/*
+
+plugins:
+  - ./vendor/bref/bref
+  - ./vendor/bref/extra-php-extensions
+  - serverless-s3-sync
+  - serverless-lift
+
+custom:
+  staticBucketName: ${self:provider.stage}-${self:service}-ehosi
+
+  s3Sync:
+    - bucketName: ${self:custom.staticBucketName}
+      localDir: public/build
