@@ -2,26 +2,36 @@
 org: naran
 service: bref-demo
 provider:
-    name: aws
-    region: ap-south-1
-    stage: ${opt:stage, 'dev'} # e.g. dev, prod, staging
+  name: aws
+  region: ap-south-1
+  stage: ${opt:stage, 'dev'} # e.g. dev, prod, staging
 
-    environment:
-      MAINTENANCE_MODE: ${ssm:/bref-demo-env/MAINTENANCE_MODE}
-      APP_URL: ${ssm:/bref-demo-env/APP_URL}
-      APP_DEBUG: ${ssm:/bref-demo-env/APP_DEBUG}
-      APP_KEY: ${ssm:/bref-demo-env/APP_KEY}
-      DB_DATABASE: ${ssm:/bref-demo-env/DB_DATABASE}
-      DB_CONNECTION: ${ssm:/bref-demo-env/DB_CONNECTION}
-      DB_HOST: ${ssm:/lightsail-db/DB_HOST}
-      DB_PORT: ${ssm:/lightsail-db/DB_PORT}
-      DB_USERNAME: ${ssm:/lightsail-db/DB_USER}
-      DB_PASSWORD: ${ssm:/lightsail-db/DB_PASS}
-      BREF_BINARY_RESPONSES: "1"
-      QUEUE_CONNECTION: sqs
-      SQS_PREFIX: https://sqs.${provider.region}.amazonaws.com/662643139049
-      SQS_QUEUE: ${self:service}-${self:provider.stage}-jobs
-      ASSET_URL: https://${self:custom.staticBucketName}.s3.${self:provider.region}.amazonaws.com
+  environment:
+    MAINTENANCE_MODE: ${ssm:/bref-demo-env/MAINTENANCE_MODE}
+    APP_URL: ${ssm:/bref-demo-env/APP_URL}
+    APP_DEBUG: ${ssm:/bref-demo-env/APP_DEBUG}
+    APP_KEY: ${ssm:/bref-demo-env/APP_KEY}
+    DB_DATABASE: ${ssm:/bref-demo-env/DB_DATABASE}
+    DB_CONNECTION: ${ssm:/bref-demo-env/DB_CONNECTION}
+    DB_HOST: ${ssm:/lightsail-db/DB_HOST}
+    DB_PORT: ${ssm:/lightsail-db/DB_PORT}
+    DB_USERNAME: ${ssm:/lightsail-db/DB_USER}
+    DB_PASSWORD: ${ssm:/lightsail-db/DB_PASS}
+    BREF_BINARY_RESPONSES: "1"
+    ASSET_URL: https://${self:custom.staticBucketName}.s3.${self:provider.region}.amazonaws.com
+    FILESYSTEM_DISK: s3
+    AWS_BUCKET: !Ref Storage
+    QUEUE_CONNECTION: sqs
+    SQS_QUEUE: ${construct:jobs.queueUrl}
+  iam:
+    role:
+      statements:
+        # Allow Lambda to read and write files in the S3 buckets
+        - Effect: Allow
+          Action: s3:*
+          Resource:
+            - !Sub '${Storage.Arn}' # the storage bucket
+            - !Sub '${Storage.Arn}/*' # and everything inside
 
 package:
   # Files and directories to exclude from deployment
@@ -58,8 +68,6 @@ functions:
   web:
     handler: public/index.php
     runtime: php-83-fpm
-    layers:
-      - ${bref-extra:gd-php-82}
     timeout: 28
     events:
       - httpApi: '*'
@@ -68,8 +76,6 @@ functions:
   artisan:
     handler: artisan
     runtime: php-83-console
-    layers:
-      - ${bref-extra:gd-php-82}
     timeout: 720 # in seconds
     # Uncomment to also run the scheduler every minute
     #events:
@@ -87,6 +93,8 @@ constructs:
 
 resources:
   Resources:
+    Storage:
+      Type: AWS::S3::Bucket
     StaticAssetsBucket:
       Type: AWS::S3::Bucket
       Properties:
@@ -123,7 +131,6 @@ resources:
 
 plugins:
   - ./vendor/bref/bref
-  - ./vendor/bref/extra-php-extensions
   - serverless-s3-sync
   - serverless-lift
 
