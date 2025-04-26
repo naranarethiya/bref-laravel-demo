@@ -2,141 +2,129 @@
 org: naran
 service: bref-demo
 provider:
-  name: aws
-  region: ap-south-1
-  stage: ${opt:stage, 'dev'} # e.g. dev, prod, staging
+    name: aws
+    region: ap-south-1
+    stage: ${opt:stage, 'dev'} # e.g. dev, prod, staging
 
-  environment:
-    MAINTENANCE_MODE: ${ssm:/bref-demo-env/MAINTENANCE_MODE}
-    APP_URL: ${ssm:/bref-demo-env/APP_URL}
-    APP_DEBUG: ${ssm:/bref-demo-env/APP_DEBUG}
-    APP_KEY: ${ssm:/bref-demo-env/APP_KEY}
-    DB_DATABASE: ${ssm:/bref-demo-env/DB_DATABASE}
-    DB_CONNECTION: ${ssm:/bref-demo-env/DB_CONNECTION}
-    DB_HOST: ${ssm:/lightsail-db/DB_HOST}
-    DB_PORT: ${ssm:/lightsail-db/DB_PORT}
-    DB_USERNAME: ${ssm:/lightsail-db/DB_USER}
-    DB_PASSWORD: ${ssm:/lightsail-db/DB_PASS}
-    BREF_BINARY_RESPONSES: "1"
-    ASSET_URL: https://${self:custom.staticBucketName}.s3.${self:provider.region}.amazonaws.com
-    FILESYSTEM_DISK: s3
-    AWS_BUCKET: !Ref Storage
-    QUEUE_CONNECTION: sqs
-    SQS_QUEUE: ${construct:jobs.queueUrl}
-  iam:
-    role:
-      statements:
-        # Allow Lambda to read and write files in the S3 buckets
-        - Effect: Allow
-          Action: s3:*
-          Resource:
-            - !Sub '${Storage.Arn}' # the storage bucket
-            - !Sub '${Storage.Arn}/*' # and everything inside
+    environment:
+        MAINTENANCE_MODE: ${ssm:/bref-demo-env/MAINTENANCE_MODE}
+        APP_URL: ${ssm:/bref-demo-env/APP_URL}
+        APP_DEBUG: ${ssm:/bref-demo-env/APP_DEBUG}
+        APP_KEY: ${ssm:/bref-demo-env/APP_KEY}
+        DB_DATABASE: ${ssm:/bref-demo-env/DB_DATABASE}
+        DB_CONNECTION: ${ssm:/bref-demo-env/DB_CONNECTION}
+        DB_HOST: ${ssm:/lightsail-db/DB_HOST}
+        DB_PORT: ${ssm:/lightsail-db/DB_PORT}
+        DB_USERNAME: ${ssm:/lightsail-db/DB_USER}
+        DB_PASSWORD: ${ssm:/lightsail-db/DB_PASS}
+        BREF_BINARY_RESPONSES: "1"
+        ASSET_URL: https://${self:custom.staticBucketName}.s3.${self:provider.region}.amazonaws.com
+        QUEUE_CONNECTION: sqs
+        SQS_QUEUE: ${construct:jobs.queueUrl}
 
 package:
-  # Files and directories to exclude from deployment
-  patterns:
-    - '!.vscode/**'
-    - '!.git/**'
-    - '!.serverless/**'
-    - '!.editorconfig'
-    - '!.env'
-    - '!.env.example'
-    - '!.gitignore'
-    - '!vite.config.js'
-    - '!serverless.yml'
-    - '!phpunit.xml'
-    - '!phpstan.neon'
-    - '!package.json'
-    - '!package-lock.json'
-    - '!node_modules/**'
-    - '!public/storage'
-    - '!resources/js/**'
-    - '!resources/css/**'
-    - '!storage/**'
-    - 'storage/framework/**'
-    - '!tests/**'
-    - '!database/*.sqlite'
-    # Exclude assets except for the manifest file
-    - '!public/build/**'
-    - 'public/build/manifest.json'
-    - '!public/hot'
+    # Files and directories to exclude from deployment
+    patterns:
+        - '!.vscode/**'
+        - '!.git/**'
+        - '!.serverless/**'
+        - '!.editorconfig'
+        - '!.env'
+        - '!.env.example'
+        - '!.gitignore'
+        - '!vite.config.js'
+        - '!serverless.yml'
+        - '!phpunit.xml'
+        - '!phpstan.neon'
+        - '!package.json'
+        - '!package-lock.json'
+        - '!node_modules/**'
+        - '!public/storage'
+        - '!resources/js/**'
+        - '!resources/css/**'
+        - '!storage/**'
+        - 'storage/framework/**'
+        - '!tests/**'
+        - '!database/*.sqlite'
+        # Exclude assets except for the manifest file
+        - '!public/build/**'
+        - 'public/build/manifest.json'
+        - '!public/hot'
 
 functions:
 
-  # This function runs the Laravel website/API
-  web:
-    handler: public/index.php
-    runtime: php-83-fpm
-    timeout: 28
-    events:
-      - httpApi: '*'
+    # This function runs the Laravel website/API
+    web:
+        handler: public/index.php
+        runtime: php-83-fpm
+        timeout: 28
+        events:
+            - httpApi: '*'
 
-  # This function lets us run artisan commands in Lambda
-  artisan:
-    handler: artisan
-    runtime: php-83-console
-    timeout: 720 # in seconds
-    # Uncomment to also run the scheduler every minute
-    #events:
-    #    - schedule:
-    #          rate: rate(1 minute)
-    #          input: '"schedule:run"'
-
-constructs:
-  jobs:
-    type: queue
-    worker:
-      handler: Bref\LaravelBridge\Queue\QueueHandler
-      runtime: php-83
-      timeout: 60 # seconds
+    # This function lets us run artisan commands in Lambda
+    artisan:
+        handler: artisan
+        runtime: php-83-console
+        timeout: 720 # in seconds
+        # Uncomment to also run the scheduler every minute
+        #events:
+        #    - schedule:
+        #          rate: rate(1 minute)
+        #          input: '"schedule:run"'
 
 resources:
-  Resources:
-    Storage:
-      Type: AWS::S3::Bucket
-    StaticAssetsBucket:
-      Type: AWS::S3::Bucket
-      Properties:
-        BucketName: ${self:custom.staticBucketName}
-        PublicAccessBlockConfiguration:
-          BlockPublicAcls: false
-          BlockPublicPolicy: false
-          IgnorePublicAcls: false
-          RestrictPublicBuckets: false
-        CorsConfiguration:
-          CorsRules:
-            - AllowedHeaders:
-                - "*"
-              AllowedMethods:
-                - GET
-                - HEAD
-              AllowedOrigins:
-                - "*"
-              ExposedHeaders:
-                - Access-Control-Allow-Origin
-              MaxAge: 3000
+    Resources:
+        StaticAssetsBucket:
+            Type: AWS::S3::Bucket
+            Properties:
+                BucketName: ${self:custom.staticBucketName}
+                PublicAccessBlockConfiguration:
+                    BlockPublicAcls: false
+                    BlockPublicPolicy: false
+                    IgnorePublicAcls: false
+                    RestrictPublicBuckets: false
+                CorsConfiguration:
+                    CorsRules:
+                        - AllowedHeaders:
+                              - "*"
+                          AllowedMethods:
+                              - GET
+                              - HEAD
+                          AllowedOrigins:
+                              - "*"
+                          ExposedHeaders:
+                              - Access-Control-Allow-Origin
+                          MaxAge: 3000
 
-    StaticAssetsBucketPolicy:
-      Type: AWS::S3::BucketPolicy
-      Properties:
-        Bucket: !Ref StaticAssetsBucket
-        PolicyDocument:
-          Statement:
-            - Sid: PublicReadGetObject
-              Effect: Allow
-              Principal: "*"
-              Action: s3:GetObject
-              Resource: arn:aws:s3:::${self:custom.staticBucketName}/*
+        StaticAssetsBucketPolicy:
+            Type: AWS::S3::BucketPolicy
+            Properties:
+                Bucket: !Ref StaticAssetsBucket
+                PolicyDocument:
+                    Statement:
+                        - Sid: PublicReadGetObject
+                          Effect: Allow
+                          Principal: "*"
+                          Action: s3:GetObject
+                          Resource: arn:aws:s3:::${self:custom.staticBucketName}/*
+
+constructs:
+    jobs:
+        type: queue
+        worker:
+            handler: Bref\LaravelBridge\Queue\QueueHandler
+            runtime: php-82
+            timeout: 60 # seconds
 
 plugins:
-  - ./vendor/bref/bref
-  - serverless-s3-sync
-  - serverless-lift
+    - ./vendor/bref/bref
+    - ./vendor/bref/extra-php-extensions
+    - serverless-s3-sync
+    - serverless-lift
 
 custom:
-  staticBucketName: ${self:provider.stage}-${self:service}-ehosi
+    staticBucketName: ${self:provider.stage}-${self:service}-ehosi
 
-  s3Sync:
-    - bucketName: ${self:custom.staticBucketName}
-      localDir: public
+    s3Sync:
+        - bucketName: ${self:custom.staticBucketName}
+          localDir: public
